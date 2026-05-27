@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System deps for yt-dlp + Pillow
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Update yt-dlp to latest
+RUN pip install --no-cache-dir --upgrade yt-dlp
+
+COPY . .
+
+RUN mkdir -p /app/storage/temp
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

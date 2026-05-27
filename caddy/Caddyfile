@@ -1,0 +1,33 @@
+# ClipIQ — Caddy Reverse Proxy
+# HTTP-only on IP 188.137.227.70 (no TLS, no domain)
+# Add domain + TLS later by replacing :80 with your domain
+
+:80 {
+    # Serve downloaded media files directly (bypass Python)
+    handle /files/* {
+        root * /opt/storage
+        file_server
+        header Cache-Control "public, max-age=3600"
+    }
+
+    # Backend API
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # Health check passthrough
+    handle /health {
+        reverse_proxy backend:8000
+    }
+
+    # Frontend (Next.js)
+    handle {
+        reverse_proxy frontend:3000
+    }
+
+    # Logs
+    log {
+        output stdout
+        format console
+    }
+}

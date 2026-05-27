@@ -1,0 +1,82 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: always
+    env_file: .env
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - TEMP_DIR=${TEMP_DIR:-/app/storage/temp}
+      - FILE_TTL_SECONDS=${FILE_TTL_SECONDS:-3600}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-500}
+      - ALLOWED_PLATFORMS=${ALLOWED_PLATFORMS:-tiktok,instagram,youtube,twitter,reddit}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://188.137.227.70}
+      - BASE_URL=${BASE_URL:-http://188.137.227.70}
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build: ./backend
+    command: python workers/downloader.py
+    restart: always
+    env_file: .env
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - TEMP_DIR=${TEMP_DIR:-/app/storage/temp}
+      - FILE_TTL_SECONDS=${FILE_TTL_SECONDS:-3600}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-500}
+      - MAX_PARALLEL_JOBS=${MAX_PARALLEL_JOBS:-5}
+      - BASE_URL=${BASE_URL:-http://188.137.227.70}
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: always
+    env_file: .env
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-/api}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL:-http://188.137.227.70}
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./storage:/opt/storage:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  redis_data:
+  caddy_data:
+  caddy_config:
